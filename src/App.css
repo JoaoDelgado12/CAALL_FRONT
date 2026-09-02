@@ -1,0 +1,203 @@
+:root {
+  --bg-color: #F8F9FA;
+  --primary: #2563EB;
+  --secondary: #64748B;
+  --success: #22C55E;
+  --danger: #EF4444;
+  --text-dark: #1F2937;
+  --joystick-bg: #E2E8F0;
+  --card-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  --dist-menu-hidden: 200px;
+}
+
+* { 
+  margin: 0; 
+  padding: 0; 
+  box-sizing: border-box; 
+  font-family: 'Inter', system-ui, -apple-system, sans-serif; 
+}
+
+/* Garante que a tela inteira previne scroll no mobile PWA */
+body, #root {
+  background-color: var(--bg-color);
+  width: 100vw;
+  height: 100dvh; /* dvh = dynamic viewport height (ignora barras de navegação do cel) */
+  overflow: hidden;
+  touch-action: none;
+}
+
+/* Novo container PWA */
+.pwa-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: var(--bg-color);
+}
+
+/* Header */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  background-color: white;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  z-index: 20;
+}
+
+.app-title {
+  font-size: 1.2rem;
+  color: var(--primary);
+  font-weight: 800;
+}
+
+#menu-btn {
+  font-size: 1.2rem;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-menu-desativado { background-color: var(--primary); }
+.btn-menu-action { background-color: #1D4ED8; }
+
+#menu {
+  width: var(--dist-menu-hidden);
+  height: 100%;
+  background: white;
+  position: absolute;
+  top: 60px;
+  right: 0;
+  padding: 20px;
+  box-shadow: -5px 0 15px rgba(0,0,0,0.1);
+  transition: transform 0.3s ease;
+  z-index: 15;
+}
+
+#menu ul { list-style: none; }
+#menu li { margin: 15px 0; }
+#menu a { color: var(--text-dark); text-decoration: none; font-weight: 600; font-size: 1.1rem; }
+
+.hidden { transform: translateX(110%); }
+.show { transform: translateX(0); }
+
+/* Área de Visualização (Visor) */
+.display-container {
+  padding: 20px;
+  flex: 0 0 25%;
+  min-height: 150px;
+}
+
+#frase-display {
+  background: white;
+  width: 100%;
+  height: 100%;
+  border-radius: 20px;
+  padding: 20px;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-dark);
+  box-shadow: var(--card-shadow);
+  border: 1px solid #E2E8F0;
+  overflow-y: auto;
+  line-height: 1.4;
+}
+
+/* Botões de Ação */
+.action-bar {
+  display: flex;
+  justify-content: space-around;
+  padding: 0 20px 10px;
+  gap: 15px;
+}
+
+.btn-action {
+  border: none;
+  border-radius: 16px;
+  padding: 15px;
+  font-weight: bold;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: transform 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+}
+
+.btn-action:active { transform: scale(0.95); }
+.btn-clear { background: #fee2e2; color: var(--danger); flex: 1; }
+.btn-play { background: var(--primary); color: white; flex: 2; }
+
+/* Joystick Container */
+.joystick-area {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 20px;
+}
+
+.category-label {
+  margin-bottom: 25px;
+  font-weight: 700;
+  color: var(--secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 0.9rem;
+}
+
+/* Grade Responsiva PWA */
+.joystick-grid {
+  display: grid;
+  /* Cria uma matriz onde cada botão tem 25% da largura da tela, mas no máximo 90px */
+  grid-template-columns: repeat(3, min(26vw, 95px));
+  grid-template-rows: repeat(3, min(26vw, 95px));
+  gap: min(3vw, 15px);
+  position: relative;
+  touch-action: none;
+}
+
+.joy-btn {
+  background: var(--joystick-bg);
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(0.7rem, 3vw, 0.9rem);
+  font-weight: 700;
+  color: var(--text-dark);
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: inset 0 -3px 5px rgba(0,0,0,0.05);
+  word-break: break-word;
+  padding: 5px;
+}
+
+.joy-btn.highlight {
+  background-color: var(--primary);
+  color: white;
+  transform: scale(1.15);
+  box-shadow: 0 5px 15px rgba(37, 99, 235, 0.4);
+}
+
+.center-dot {
+  background: #334155;
+  color: #94A3B8;
+  font-size: 1.5rem;
+  z-index: 10;
+  cursor: grab;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+}
+
+.center-dot:active {
+  cursor: grabbing;
+  background: var(--text-dark);
+}

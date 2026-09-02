@@ -1,0 +1,11 @@
+    História do usuario
+Como um novo usuario que acaba de instalar o  aplicativo. 
+Eu quero poder pular a tela de introdução e poder na tela de login cadastrar uma conta.
+Para que eu possa utilizar e guardas alguns dados, como as palavras editadas e os usuario de suporte vinculados.
+Para que se eu precisar conectar em um outro celular eu já consiga ter o upload desses dados no novo celular.
+
+    criterio de aceite
+No cadastro o usuario deve colocar:
+  o nome completo do novo usuario (obrigatorio)
+  o email (obrigatorio)
+  uma senha (obrigatorio)
