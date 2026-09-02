@@ -181,7 +181,7 @@ const App: React.FC = () => {
     limpar();
   };
 
-  const renderJoyBtn = (gridIndex: number, labelIndex: number) => {
+  const renderJoyBtn = (labelIndex: number) => {
     return (
       <button
         key={labelIndex}
@@ -238,11 +238,11 @@ const App: React.FC = () => {
         <div className="category-label" id="cat-nome">{catNome}</div>
 
         <div className="joystick-grid">
-          {renderJoyBtn(0, 0)}
-          {renderJoyBtn(1, 1)}
-          {renderJoyBtn(2, 2)}
+          {renderJoyBtn(0)}
+          {renderJoyBtn(1)}
+          {renderJoyBtn(2)}
           
-          {renderJoyBtn(3, 3)}
+          {renderJoyBtn(3)}
           
           {/* Joystick Center Dot */}
           <div
@@ -256,11 +256,11 @@ const App: React.FC = () => {
             ●
           </div>
           
-          {renderJoyBtn(5, 4)}
+          {renderJoyBtn(4)}
           
-          {renderJoyBtn(6, 5)}
-          {renderJoyBtn(7, 6)}
-          {renderJoyBtn(8, 7)}
+          {renderJoyBtn(5)}
+          {renderJoyBtn(6)}
+          {renderJoyBtn(7)}
         </div>
       </div>
     </div>
