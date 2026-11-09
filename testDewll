@@ -1,0 +1,215 @@
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import './App.css';
+import { falar } from './components/voz';
+
+// --- MOCK DO MAPWORD ---
+const mapWord = new Map([
+  ["1", ["Eu", "Você", "Nós", "Eles", "Ela", "Ele", "Meu", "Seu", "Sua"]],
+  ["2", ["Quero", "Gosto", "Sinto", "Estou", "Vou", "Falo", "Penso", "Acho", "Preciso"]],
+  ["3", ["Ir", "Ficar", "Sair", "Voltar", "Correr", "Andar", "Parar", "Pular", "Sentar"]],
+  ["4", ["Comer", "Beber", "Mastigar", "Engolir", "Provar", "Lanchar", "Jantar", "Almoçar", "Ceia"]],
+  ["5", ["Água", "Suco", "Leite", "Café", "Chá", "Refrigerante", "Sopa", "Vitamina", "Achocolatado"]],
+  ["6", ["Brincar", "Jogar", "Assistir", "Ouvir", "Ler", "Desenhar", "Pintar", "Cantar", "Dançar"]],
+  ["7", ["Dormir", "Acordar", "Descansar", "Deitar", "Sonhar", "Cochilar", "Relaxar", "Espreguiçar", "Bocejar"]],
+  ["8", ["Ajuda", "Por favor", "Obrigado", "Desculpa", "Sim", "Não", "Talvez", "Agora", "Depois"]]
+]);
+
+const App: React.FC = () => {
+  const [fraseAtual, setFraseAtual] = useState([]);
+  const [menuAberto, setMenuAberto] = useState(false);
+  const [catNome, setCatNome] = useState("Selecione Categoria");
+  const [labels, setLabels] = useState([]);
+  
+  const [joystickPos, setJoystickPos] = useState({ x: 0, y: 0 });
+
+  const isDraggingRef = useRef(false);
+  const startPosRef = useRef({ x: 0, y: 0 }); 
+  const activeTargetRef = useRef(null); 
+  const maxDistanceRef = useRef(110);
+  
+  const joystickRef = useRef(null);
+  const displayRef = useRef(null);
+
+  const [vozes, setVozes] = useState([]);
+
+  // 🌟 NOVO: Controladores do Dwell Selection
+  const timerSelecaoRef = useRef(null);
+  const TEMPO_DWELL = 600; // Tempo parado sobre o botão para selecionar (em milissegundos)
+
+  // 🌟 NOVO: Referência das labels atuais para não quebrar o drag quando o estado muda
+  const labelsRef = useRef(labels);
+  useEffect(() => { labelsRef.current = labels; }, [labels]);
+
+  const resetBtn = useCallback(() => {
+    const defaultLabels = Array.from({ length: 8 }).map((_, i) => {
+      const wordList = mapWord.get(String(i + 1));
+      return wordList ? wordList[0] : `Cat ${i + 1}`;
+    });
+    setLabels(defaultLabels);
+  }, []);
+  
+  const limpar = () => {
+    setFraseAtual([]);
+    setCatNome('Selecione Categoria');
+    resetBtn();
+  };
+
+  const carregarFala = () => {
+    falar(fraseAtual, vozes);
+    limpar();
+  }
+
+  const selecionar = (cat: number) => {
+    const newLabels = Object.assign([], labelsRef.current).map((_, i) => {
+      const wordList = mapWord.get(String(i + 1));
+      return wordList && wordList[cat - 1] ? wordList[cat - 1] : "---"; 
+    });
+    setLabels(newLabels);
+  };
+
+  useEffect(() => {
+    const carregarVozes = () => setVozes(window.speechSynthesis.getVoices());
+    carregarVozes();
+    window.speechSynthesis.onvoiceschanged = carregarVozes;
+  }, []); 
+  
+  useEffect(() => {
+    resetBtn();
+    maxDistanceRef.current = Math.min(110, window.innerWidth * 0.25);
+  }, [resetBtn]);
+
+  useEffect(() => {
+    if (displayRef.current) {
+      displayRef.current.scrollTop = displayRef.current.scrollHeight;
+    }
+  }, [fraseAtual]);
+
+  const startDrag = (e: React.PointerEvent) => {
+    isDraggingRef.current = true;
+    startPosRef.current = { x: e.clientX, y: e.clientY };
+    if (joystickRef.current) joystickRef.current.style.transition = 'none';
+  };
+
+  // 🌟 MODIFICADO: A lógica do joystick (incluindo Dwell Selection) toda isolada aqui
+  useEffect(() => {
+    const doDrag = (e: PointerEvent) => {
+      if (!isDraggingRef.current) return;
+      e.preventDefault();
+
+      let dx = e.clientX - startPosRef.current.x;
+      let dy = e.clientY - startPosRef.current.y;
+
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const limit = maxDistanceRef.current;
+      
+      if (distance > limit) {
+        dx *= limit / distance;
+        dy *= limit / distance;
+      }
+
+      setJoystickPos({ x: dx, y: dy });
+
+      // --- INÍCIO DA LÓGICA DO DWELL SELECTION ---
+      if (distance < 20) {
+        if (timerSelecaoRef.current) clearTimeout(timerSelecaoRef.current);
+        setHighlightedIndex(null);
+        activeTargetRef.current = null;
+        return;
+      }
+
+      if (joystickRef.current) joystickRef.current.style.pointerEvents = 'none';
+      const target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement;
+      if (joystickRef.current) joystickRef.current.style.pointerEvents = 'auto';
+
+      // Verifica se está em cima de um botão, e garante que não é o próprio centro
+      if (target && target.classList.contains('joy-btn') && target.id !== 'joyStick') {
+        const index = Number(target.getAttribute('data-index'));
+
+        // Se entrou num botão NOVO
+        if (index !== activeTargetRef.current) {
+          // Limpa o timer do botão antigo
+          if (timerSelecaoRef.current) clearTimeout(timerSelecaoRef.current);
+          
+          activeTargetRef.current = index;
+          setHighlightedIndex(index);
+
+          // 🌟 NOVO: Inicia o cronômetro!
+          timerSelecaoRef.current = setTimeout(() => {
+            const selectedLabel = labelsRef.current[index];
+            setFraseAtual((prev) => [...prev, selectedLabel]);
+            setCatNome(selectedLabel);
+            selecionar(index + 1);
+            
+            if (navigator.vibrate) navigator.vibrate(50);
+
+            // Reseta a marcação para não gerar duplo clique no pointerup
+            activeTargetRef.current = null;
+            setHighlightedIndex(null);
+          }, TEMPO_DWELL);
+        }
+      } else {
+        // Saiu de cima de todos os botões (espaço em branco)
+        if (activeTargetRef.current !== null) {
+          if (timerSelecaoRef.current) clearTimeout(timerSelecaoRef.current);
+          activeTargetRef.current = null;
+          setHighlightedIndex(null);
+        }
+      }
+      // --- FIM DA LÓGICA DO DWELL SELECTION ---
+    };
+
+    const stopDrag = () => {
+      if (!isDraggingRef.current) return;
+      isDraggingRef.current = false;
+
+      // Se soltar o dedo antes do tempo acabar, cancela o Dwell e executa o clique rápido
+      if (timerSelecaoRef.current) clearTimeout(timerSelecaoRef.current);
+
+      const active = activeTargetRef.current;
+      if (active !== null) {
+        const selectedLabel = labelsRef.current[active];
+        setFraseAtual((prev) => [...prev, selectedLabel]);
+        setCatNome(selectedLabel);
+        selecionar(active + 1);
+        
+        if (navigator.vibrate) navigator.vibrate(50);
+      }
+
+      activeTargetRef.current = null;
+      setHighlightedIndex(null);
+      setJoystickPos({ x: 0, y: 0 });
+      
+      if (joystickRef.current) {
+        joystickRef.current.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+      }
+    };
+
+    // 🌟 MODIFICADO: Eventos atrelados ao 'document' em vez de ao 'getElementById'
+    document.addEventListener('pointermove', doDrag, {passive: false});
+    document.addEventListener('pointerup', stopDrag);
+
+    return () => {
+      document.removeEventListener('pointermove', doDrag);
+      document.removeEventListener('pointerup', stopDrag);
+      if (timerSelecaoRef.current) clearTimeout(timerSelecaoRef.current);
+    };
+  }, []); // 🌟 MODIFICADO: Dependência vazia, resolve travamentos ao arrastar
+
+  const renderJoyBtn = (labelIndex: number) => {
+    // 🌟 MODIFICADO: Classe dinâmica e troca do onPointerUp por onClick
+    return (
+       {
+          // Mantido apenas para caso o usuário dê um toque simples sem usar o joystick central
+          setFraseAtual((prev) => [...prev, labels[labelIndex]]);
+          setCatNome(labels[labelIndex]);
+          selecionar(labelIndex + 1);
+          if (navigator.vibrate) navigator.vibrate(30);
+        }}
+      >
+        {labels[labelIndex]}
+      
+    );
+  };
+
+  return (
+    // ... Todo o seu return original fica aqui, não sofreu nenhuma alteração estrutural

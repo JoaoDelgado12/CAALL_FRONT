@@ -1,0 +1,34 @@
+services:
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: tunnel
+    restart: unless-stopped
+    environment:
+      - TUNNEL_TOKEN=eyJhIjoiYmRkMTEzNTE5ZTBlYTNiZTIzNjMzZDVmYjQ2NGZlODgiLCJ0IjoiNzRiYjI1NmYtNmY5Ni00ZWYxLTk1NDItNzNlZTA5Mjk1YWY5IiwicyI6IlkySXpaV1F4WXprdE5qYzNaQzAwWXpReUxUa3lNamt0WkRRNE1qazRPVEkzTXpreCJ9
+    command: tunnel --no-autoupdate run
+    networks:
+      caall_net:
+        ipv4_address: 192.168.15.162
+  front:
+    build: .
+    image: app_front
+    container_name: front
+    stdin_open: true
+    tty: true 
+    restart: unless-stopped
+    ports:
+      - "5174:8080"
+    depends_on:
+      - tunnel
+    networks:
+      caall_net:
+        ipv4_address: 192.168.15.163
+networks:
+  caall_net:
+    name: caall_net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.15.160/29
+          gateway: 192.168.15.161
+        

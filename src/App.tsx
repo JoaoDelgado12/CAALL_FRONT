@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import './App.css';
+import {falar} from './components/voz'
 
 // --- MOCK DO MAPWORD ---
 const mapWord = new Map<string, string[]>([
@@ -20,25 +21,20 @@ const App: React.FC = () => {
   const [labels, setLabels] = useState<string[]>([]); //Palavra escolhida no trackpad 
   
   const [joystickPos, setJoystickPos] = useState({ x: 0, y: 0 });
-  const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null); //Para evedencia as palavras
-
+  
   // Refs para lidar com eventos globais sem conflito com o ciclo de vida do React
   const isDraggingRef = useRef(false);
-  const startPosRef = useRef({ x: 0, y: 0 });
+  const startPosRef = useRef({ x: 0, y: 0 }); //definindo a posição do botão
   const activeTargetRef = useRef<number | null>(null); // Resolve o bug de duplicação
   const maxDistanceRef = useRef(110);
   
   const joystickRef = useRef<HTMLDivElement>(null);
   const displayRef = useRef<HTMLDivElement>(null);
 
-  // --- CARREGAMENTO DE VOZES ---
   const [vozes, setVozes] = useState<SpeechSynthesisVoice[]>([]);
-  
-  useEffect(() => {
-    const carregarVozes = () => setVozes(window.speechSynthesis.getVoices());
-    carregarVozes();
-    window.speechSynthesis.onvoiceschanged = carregarVozes;
-  }, []);
+
+  const timerSelecaoRef = useRef(null);
+  const TEMPO_DWELL = 600;
 
   const resetBtn = useCallback(() => {
     const defaultLabels = Array.from({ length: 8 }).map((_, i) => {
@@ -47,10 +43,54 @@ const App: React.FC = () => {
     });
     setLabels(defaultLabels);
   }, []);
+  
+  const limpar = () => {
+    setFraseAtual([]);
+    setCatNome('Selecione Categoria');
+    resetBtn();
+  };
+  
+
+  const carregarFala = () => {
+    falar(fraseAtual, vozes);
+    limpar();
+  }
+   
+  const checkProximity = (dist: number, clientX: number, clientY: number) => {
+    if (dist < 20) {
+      activeTargetRef.current = null;
+      return;
+    }
+
+    if (joystickRef.current) joystickRef.current.style.pointerEvents = 'none';
+    const target = document.elementFromPoint(clientX, clientY) as HTMLElement;
+    if (joystickRef.current) joystickRef.current.style.pointerEvents = 'auto';
+
+    if (target && target.classList.contains('joy-btn')) {
+      const index = Number(target.getAttribute('data-index'));
+      activeTargetRef.current = index; // Guarda a intenção
+    } else {
+      activeTargetRef.current = null;
+    }
+  };
+
+  const selecionar = (cat: number) => {
+    const newLabels = labels.map((_, i) => {
+      const wordList = mapWord.get(String(i + 1));
+      return wordList && wordList[cat - 1] ? wordList[cat - 1] : "---"; 
+    });
+    setLabels(newLabels);
+  };
+
+  useEffect(() => {
+    const carregarVozes = () => setVozes(window.speechSynthesis.getVoices());
+    carregarVozes();
+    window.speechSynthesis.onvoiceschanged = carregarVozes;
+  }, []); 
+  
 
   useEffect(() => {
     resetBtn();
-    // Calcula o limite do joystick com base na largura da tela para não bugar em telas pequenas
     maxDistanceRef.current = Math.min(110, window.innerWidth * 0.25);
   }, [resetBtn]);
 
@@ -92,7 +132,6 @@ const App: React.FC = () => {
 
       const active = activeTargetRef.current;
       if (active !== null) {
-        // Agora os estados são atualizados aqui fora de funcções updaters
         const selectedLabel = labels[active];
         setFraseAtual((prev) => [...prev, selectedLabel]);
         setCatNome(selectedLabel);
@@ -103,96 +142,38 @@ const App: React.FC = () => {
 
       // Limpeza de estado e visual
       activeTargetRef.current = null;
-      setHighlightedIndex(null);
       setJoystickPos({ x: 0, y: 0 });
       
       if (joystickRef.current) {
         joystickRef.current.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
       }
     };
-
-    window.addEventListener('pointermove', doDrag, { passive: false });
-    window.addEventListener('pointerup', stopDrag);
+    document.getElementById('joyStick')?.addEventListener('pointermove', doDrag, {passive: false});
+    document.getElementById('joyStick')?.addEventListener('pointerup', stopDrag);
 
     return () => {
-      window.removeEventListener('pointermove', doDrag);
-      window.removeEventListener('pointerup', stopDrag);
+      document.getElementById('joyStick')?.removeEventListener('pointermove', doDrag);
+      document.getElementById('joyStick')?.removeEventListener('pointerup', stopDrag);
     };
   }, [labels]);
 
-  const checkProximity = (dist: number, clientX: number, clientY: number) => {
-    if (dist < 20) {
-      setHighlightedIndex(null);
-      activeTargetRef.current = null;
-      return;
-    }
+  
 
-    if (joystickRef.current) joystickRef.current.style.pointerEvents = 'none';
-    const target = document.elementFromPoint(clientX, clientY) as HTMLElement;
-    if (joystickRef.current) joystickRef.current.style.pointerEvents = 'auto';
 
-    if (target && target.classList.contains('joy-btn')) {
-      const index = Number(target.getAttribute('data-index'));
-      setHighlightedIndex(index);
-      activeTargetRef.current = index; // Guarda a intenção
-    } else {
-      setHighlightedIndex(null);
-      activeTargetRef.current = null;
-    }
-  };
-
-  const selecionar = (cat: number) => {
-    const newLabels = labels.map((_, i) => {
-      const wordList = mapWord.get(String(i + 1));
-      return wordList && wordList[cat - 1] ? wordList[cat - 1] : "---"; 
-    });
-    setLabels(newLabels);
-  };
-
-  const limpar = () => {
-    setFraseAtual([]);
-    setCatNome('Selecione Categoria');
-    resetBtn();
-  };
-
-  const falar = () => {
-    const texto = fraseAtual.join(' ');
-    if (!texto) return;
-
-    const utterance = new SpeechSynthesisUtterance(texto);
-    utterance.lang = 'pt-BR';
-    
-    // Configurações para soar mais amigável
-    utterance.rate = 0.95; // Levemente mais devagar
-    utterance.pitch = 1.1; // Tom levemente mais alto (soar mais meiga/amigável)
-
-    // Tentar encontrar uma voz premium/feminina brasileira
-    const ptVoices = vozes.filter(v => v.lang.includes('pt-BR'));
-    const friendlyVoice = ptVoices.find(v => 
-      v.name.includes('Google') || 
-      v.name.includes('Feminino') || 
-      v.name.includes('Luciana') || 
-      v.name.includes('Natural')
-    ) || ptVoices[0];
-
-    if (friendlyVoice) utterance.voice = friendlyVoice;
-
-    window.speechSynthesis.speak(utterance);
-    limpar();
-  };
 
   const renderJoyBtn = (labelIndex: number) => {
     return (
       <button
         key={labelIndex}
         data-index={labelIndex}
-        className={`joy-btn ${highlightedIndex === labelIndex ? 'highlight' : ''}`}
-        onClick={() => {
-          // Clique direto para quem preferir não arrastar o dedo
-          setFraseAtual((prev) => [...prev, labels[labelIndex]]);
-          setCatNome(labels[labelIndex]);
-          selecionar(labelIndex + 1);
-          if (navigator.vibrate) navigator.vibrate(30);
+        className={`joy-btn`}
+        onPointerUp={() => {
+          if(isDraggingRef.current){
+            setFraseAtual((prev) => [...prev, labels[labelIndex]]);
+            setCatNome(labels[labelIndex]);
+            selecionar(labelIndex + 1);
+            if (navigator.vibrate) navigator.vibrate(30);
+          }
         }}
       >
         {labels[labelIndex]}
@@ -214,56 +195,58 @@ const App: React.FC = () => {
           ☰
         </button>
       </header>
+      <main>
+        <nav id="menu" className={menuAberto ? 'show' : 'hidden'}>
+          <ul>
+            <li><a href="#">Perfil</a></li>
+            <li><a href="#">Editar palavras</a></li>
+            <li><a href="#">Contatos</a></li>
+          </ul>
+        </nav>
 
-      <nav id="menu" className={menuAberto ? 'show' : 'hidden'}>
-        <ul>
-          <li><a href="#">Perfil</a></li>
-          <li><a href="#">Editar palavras</a></li>
-          <li><a href="#">Contatos</a></li>
-        </ul>
-      </nav>
-
-      <div className="display-container">
-        <div id="frase-display" ref={displayRef}>
-          {fraseAtual.length > 0 ? fraseAtual.join(' ') + '...' : 'Toque em uma categoria...'}
-        </div>
-      </div>
-
-      <div className="action-bar">
-        <button className="btn-action btn-clear" onClick={limpar}>🗑️ Limpar</button>
-        <button className="btn-action btn-play" onClick={falar}>🔊 Falar</button>
-      </div>
-
-      <div className="joystick-area">
-        <div className="category-label" id="cat-nome">{catNome}</div>
-
-        <div className="joystick-grid">
-          {renderJoyBtn(0)}
-          {renderJoyBtn(1)}
-          {renderJoyBtn(2)}
-          
-          {renderJoyBtn(3)}
-          
-          {/* Joystick Center Dot */}
-          <div
-            className="joy-btn center-dot"
-            ref={joystickRef}
-            onPointerDown={startDrag}
-            style={{
-              transform: `translate(${joystickPos.x}px, ${joystickPos.y}px)`
-            }}
-          >
-            ●
+        <div className="display-container">
+          <div id="frase-display" ref={displayRef}>
+            {fraseAtual.length > 0 ? fraseAtual.join(' ') + '...' : 'Toque em uma categoria...'}
           </div>
-          
-          {renderJoyBtn(4)}
-          
-          {renderJoyBtn(5)}
-          {renderJoyBtn(6)}
-          {renderJoyBtn(7)}
         </div>
-      </div>
+
+        <div className="action-bar">
+          <button className="btn-action btn-clear" onClick={limpar}>🗑️ Limpar</button>
+          <button className="btn-action btn-play" onClick={carregarFala}>🔊 Falar</button>
+        </div>
+
+        <div className="joystick-area">
+          <div className="category-label" id="cat-nome">{catNome}</div>
+
+          <div className="joystick-grid">
+            {renderJoyBtn(0)}
+            {renderJoyBtn(1)}
+            {renderJoyBtn(2)}
+            
+            {renderJoyBtn(3)}
+            
+            {/* Joystick Center Dot */}
+            <div id="joyStick"
+              className="joy-btn center-dot"
+              ref={joystickRef}
+              onPointerDown={startDrag}
+              style={{
+                transform: `translate(${joystickPos.x}px, ${joystickPos.y}px)`
+              }}
+            >
+            </div>
+            
+            {renderJoyBtn(4)}
+            
+            {renderJoyBtn(5)}
+            {renderJoyBtn(6)}
+            {renderJoyBtn(7)}
+          </div>
+        </div>
+      </main>
+
     </div>
+    
   );
 };
 

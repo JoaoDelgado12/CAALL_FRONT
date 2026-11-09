@@ -26,5 +26,3 @@ dev-dist
 
 #docker
 .dockerignore
-dockerfile
-docker-compose.yaml
