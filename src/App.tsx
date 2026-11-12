@@ -1,40 +1,29 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import './App.css';
-import {falar} from './components/voz'
-
-// --- MOCK DO MAPWORD ---
-const mapWord = new Map<string, string[]>([
-  ["1", ["Eu", "Você", "Nós", "Eles", "Ela", "Ele", "Meu", "Seu", "Sua"]],
-  ["2", ["Quero", "Gosto", "Sinto", "Estou", "Vou", "Falo", "Penso", "Acho", "Preciso"]],
-  ["3", ["Ir", "Ficar", "Sair", "Voltar", "Correr", "Andar", "Parar", "Pular", "Sentar"]],
-  ["4", ["Comer", "Beber", "Mastigar", "Engolir", "Provar", "Lanchar", "Jantar", "Almoçar", "Ceia"]],
-  ["5", ["Água", "Suco", "Leite", "Café", "Chá", "Refrigerante", "Sopa", "Vitamina", "Achocolatado"]],
-  ["6", ["Brincar", "Jogar", "Assistir", "Ouvir", "Ler", "Desenhar", "Pintar", "Cantar", "Dançar"]],
-  ["7", ["Dormir", "Acordar", "Descansar", "Deitar", "Sonhar", "Cochilar", "Relaxar", "Espreguiçar", "Bocejar"]],
-  ["8", ["Ajuda", "Por favor", "Obrigado", "Desculpa", "Sim", "Não", "Talvez", "Agora", "Depois"]]
-]);
+import { falar } from './components/voice';
+import { mapWord } from './components/dictionary';
 
 const App: React.FC = () => {
-  const [fraseAtual, setFraseAtual] = useState<string[]>([]); //Frase do visor
+  const [fraseAtual, setFraseAtual] = useState<string[]>([]);
   const [menuAberto, setMenuAberto] = useState(false);
   const [catNome, setCatNome] = useState("Selecione Categoria");
-  const [labels, setLabels] = useState<string[]>([]); //Palavra escolhida no trackpad 
-  
+  const [labels, setLabels] = useState<string[]>([]);
   const [joystickPos, setJoystickPos] = useState({ x: 0, y: 0 });
-  
-  // Refs para lidar com eventos globais sem conflito com o ciclo de vida do React
+  const [vozes, setVozes] = useState<SpeechSynthesisVoice[]>([]);
+
+  // Drag State Tracking
   const isDraggingRef = useRef(false);
-  const startPosRef = useRef({ x: 0, y: 0 }); //definindo a posição do botão
-  const activeTargetRef = useRef<number | null>(null); // Resolve o bug de duplicação
+  const startPosRef = useRef({ x: 0, y: 0 });
+  const activeTargetRef = useRef<number | null>(null);
   const maxDistanceRef = useRef(110);
-  
+  const labelsRef = useRef<string[]>(labels);
+
   const joystickRef = useRef<HTMLDivElement>(null);
   const displayRef = useRef<HTMLDivElement>(null);
 
-  const [vozes, setVozes] = useState<SpeechSynthesisVoice[]>([]);
-
-  const timerSelecaoRef = useRef(null);
-  const TEMPO_DWELL = 600;
+  useEffect(() => {
+    labelsRef.current = labels;
+  }, [labels]);
 
   const resetBtn = useCallback(() => {
     const defaultLabels = Array.from({ length: 8 }).map((_, i) => {
@@ -43,51 +32,35 @@ const App: React.FC = () => {
     });
     setLabels(defaultLabels);
   }, []);
-  
+
   const limpar = () => {
     setFraseAtual([]);
     setCatNome('Selecione Categoria');
     resetBtn();
   };
-  
 
   const carregarFala = () => {
     falar(fraseAtual, vozes);
     limpar();
-  }
-   
-  const checkProximity = (dist: number, clientX: number, clientY: number) => {
-    if (dist < 20) {
-      activeTargetRef.current = null;
-      return;
-    }
-
-    if (joystickRef.current) joystickRef.current.style.pointerEvents = 'none';
-    const target = document.elementFromPoint(clientX, clientY) as HTMLElement;
-    if (joystickRef.current) joystickRef.current.style.pointerEvents = 'auto';
-
-    if (target && target.classList.contains('joy-btn')) {
-      const index = Number(target.getAttribute('data-index'));
-      activeTargetRef.current = index; // Guarda a intenção
-    } else {
-      activeTargetRef.current = null;
-    }
   };
 
-  const selecionar = (cat: number) => {
-    const newLabels = labels.map((_, i) => {
+  const selecionar = useCallback((cat: number) => {
+    const newLabels = Array.from({ length: 8 }).map((_, i) => {
       const wordList = mapWord.get(String(i + 1));
-      return wordList && wordList[cat - 1] ? wordList[cat - 1] : "---"; 
+      return wordList && wordList[cat - 1] ? wordList[cat - 1] : "---";
     });
     setLabels(newLabels);
-  };
+  }, []);
 
   useEffect(() => {
     const carregarVozes = () => setVozes(window.speechSynthesis.getVoices());
     carregarVozes();
     window.speechSynthesis.onvoiceschanged = carregarVozes;
-  }, []); 
-  
+
+    return () => {
+      window.speechSynthesis.onvoiceschanged = null;
+    };
+  }, []);
 
   useEffect(() => {
     resetBtn();
@@ -100,81 +73,168 @@ const App: React.FC = () => {
     }
   }, [fraseAtual]);
 
+  // Spatial Hover Detection (Applies bounding box logic for visual feedback)
+  const checkProximity = useCallback((clientX: number, clientY: number) => {
+    if (!joystickRef.current) return;
+    
+    // Drag threshold to avoid accidental selections on simple taps
+    const dragDist = Math.sqrt(
+      (clientX - startPosRef.current.x) ** 2 + 
+      (clientY - startPosRef.current.y) ** 2
+    );
+
+    if (dragDist < 25) {
+      activeTargetRef.current = null;
+      return;
+    }
+
+    const joyRect = joystickRef.current.getBoundingClientRect();
+    const joyCx = joyRect.left + joyRect.width / 2;
+    const joyCy = joyRect.top + joyRect.height / 2;
+
+    const btns = document.querySelectorAll('.joy-btn[data-index]');
+    let hoveredIndex: number | null = null;
+    let minDistance = Infinity;
+    let nearestIndex: number | null = null;
+
+    btns.forEach((btn) => {
+      const rect = btn.getBoundingClientRect();
+      const btnIndex = Number(btn.getAttribute('data-index'));
+
+      // Strict Box Collision
+      if (joyCx >= rect.left && joyCx <= rect.right && joyCy >= rect.top && joyCy <= rect.bottom) {
+        hoveredIndex = btnIndex;
+      }
+
+      // Nearest Neighbor calculation
+      const btnCx = rect.left + rect.width / 2;
+      const btnCy = rect.top + rect.height / 2;
+      const dist = Math.sqrt((joyCx - btnCx) ** 2 + (joyCy - btnCy) ** 2);
+
+      if (dist < minDistance) {
+        minDistance = dist;
+        nearestIndex = btnIndex;
+      }
+    });
+
+    activeTargetRef.current = hoveredIndex !== null ? hoveredIndex : nearestIndex;
+  }, []);
+
+  // Global Pointer Move Handler
+  const handleGlobalPointerMove = useCallback((e: PointerEvent) => {
+    if (!isDraggingRef.current) return;
+    e.preventDefault();
+
+    let dx = e.clientX - startPosRef.current.x;
+    let dy = e.clientY - startPosRef.current.y;
+
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    const limit = maxDistanceRef.current;
+
+    if (distance > limit) {
+      dx *= limit / distance;
+      dy *= limit / distance;
+    }
+
+    setJoystickPos({ x: dx, y: dy });
+    checkProximity(e.clientX, e.clientY);
+  }, [checkProximity]);
+
+  // Global Pointer Up Handler (Implements Modules 1, 2, and 3)
+  const handleGlobalPointerUp = useCallback((e: PointerEvent) => {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+
+    window.removeEventListener('pointermove', handleGlobalPointerMove);
+    window.removeEventListener('pointerup', handleGlobalPointerUp);
+
+    const joystick = joystickRef.current;
+    let finalTargetIndex: number | null = null;
+
+    if (joystick) {
+      // MODULE 1: Capture Joystick Center
+      const joyRect = joystick.getBoundingClientRect();
+      const joyCx = joyRect.left + joyRect.width / 2;
+      const joyCy = joyRect.top + joyRect.height / 2;
+
+      // MODULE 2 & 3: Bounding Box Collision and Fallback
+      const btns = document.querySelectorAll('.joy-btn[data-index]');
+      let minDistance = Infinity;
+      let nearestIndex: number | null = null;
+
+      btns.forEach((btn) => {
+        const rect = btn.getBoundingClientRect();
+        const btnIndex = Number(btn.getAttribute('data-index'));
+
+        // Strict Box Collision Check
+        if (joyCx >= rect.left && joyCx <= rect.right && joyCy >= rect.top && joyCy <= rect.bottom) {
+          finalTargetIndex = btnIndex;
+        }
+
+        // Euclidean Distance for nearest neighbor calculation
+        const btnCx = rect.left + rect.width / 2;
+        const btnCy = rect.top + rect.height / 2;
+        const dist = Math.sqrt((joyCx - btnCx) ** 2 + (joyCy - btnCy) ** 2);
+
+        if (dist < minDistance) {
+          minDistance = dist;
+          nearestIndex = btnIndex;
+        }
+      });
+
+      // Calculate total drag distance to ensure intent
+      const dragDist = Math.sqrt(
+        (e.clientX - startPosRef.current.x) ** 2 + 
+        (e.clientY - startPosRef.current.y) ** 2
+      );
+
+      // Fallback: If no direct collision but dragged far enough, pick the closest button
+      if (finalTargetIndex === null && nearestIndex !== null && dragDist > 25) {
+        finalTargetIndex = nearestIndex;
+      }
+    }
+
+    // Apply the selection
+    if (finalTargetIndex !== null) {
+      const currentLabels = labelsRef.current;
+      const selectedLabel = currentLabels[finalTargetIndex];
+      if (selectedLabel) {
+        setFraseAtual((prev) => [...prev, selectedLabel]);
+        setCatNome(selectedLabel);
+        selecionar(finalTargetIndex + 1);
+        if (navigator.vibrate) navigator.vibrate(50);
+      }
+    }
+
+    // Reset State & UI
+    activeTargetRef.current = null;
+    setJoystickPos({ x: 0, y: 0 });
+
+    if (joystickRef.current) {
+      joystickRef.current.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+    }
+  }, [handleGlobalPointerMove, selecionar]);
+
   const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
     isDraggingRef.current = true;
     startPosRef.current = { x: e.clientX, y: e.clientY };
-    if (joystickRef.current) joystickRef.current.style.transition = 'none';
+
+    if (joystickRef.current) {
+      joystickRef.current.style.transition = 'none';
+    }
+
+    window.addEventListener('pointermove', handleGlobalPointerMove, { passive: false });
+    window.addEventListener('pointerup', handleGlobalPointerUp);
   };
 
-  useEffect(() => {
-    const doDrag = (e: PointerEvent) => {
-      if (!isDraggingRef.current) return;
-      e.preventDefault();
-
-      let dx = e.clientX - startPosRef.current.x;
-      let dy = e.clientY - startPosRef.current.y;
-
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      const limit = maxDistanceRef.current;
-      
-      if (distance > limit) {
-        dx *= limit / distance;
-        dy *= limit / distance;
-      }
-
-      setJoystickPos({ x: dx, y: dy });
-      checkProximity(distance, e.clientX, e.clientY);
-    };
-
-    const stopDrag = () => {
-      if (!isDraggingRef.current) return;
-      isDraggingRef.current = false;
-
-      const active = activeTargetRef.current;
-      if (active !== null) {
-        const selectedLabel = labels[active];
-        setFraseAtual((prev) => [...prev, selectedLabel]);
-        setCatNome(selectedLabel);
-        selecionar(active + 1);
-        
-        if (navigator.vibrate) navigator.vibrate(50);
-      }
-
-      // Limpeza de estado e visual
-      activeTargetRef.current = null;
-      setJoystickPos({ x: 0, y: 0 });
-      
-      if (joystickRef.current) {
-        joystickRef.current.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
-      }
-    };
-    document.getElementById('joyStick')?.addEventListener('pointermove', doDrag, {passive: false});
-    document.getElementById('joyStick')?.addEventListener('pointerup', stopDrag);
-
-    return () => {
-      document.getElementById('joyStick')?.removeEventListener('pointermove', doDrag);
-      document.getElementById('joyStick')?.removeEventListener('pointerup', stopDrag);
-    };
-  }, [labels]);
-
-  
-
-
-
   const renderJoyBtn = (labelIndex: number) => {
+    const isHovered = activeTargetRef.current === labelIndex;
     return (
       <button
         key={labelIndex}
         data-index={labelIndex}
-        className={`joy-btn`}
-        onPointerUp={() => {
-          if(isDraggingRef.current){
-            setFraseAtual((prev) => [...prev, labels[labelIndex]]);
-            setCatNome(labels[labelIndex]);
-            selecionar(labelIndex + 1);
-            if (navigator.vibrate) navigator.vibrate(30);
-          }
-        }}
+        className={`joy-btn ${isHovered ? 'hovered' : ''}`}
+        style={isHovered ? { transform: 'scale(1.2)', backgroundColor: '#e0f7fa' } : {}}
       >
         {labels[labelIndex]}
       </button>
@@ -183,8 +243,6 @@ const App: React.FC = () => {
 
   return (
     <div className="pwa-container">
-      
-      {/* Header Responsivo */}
       <header className="header">
         <h1 className="app-title">Voz Ativa</h1>
         <button
@@ -195,6 +253,7 @@ const App: React.FC = () => {
           ☰
         </button>
       </header>
+      
       <main>
         <nav id="menu" className={menuAberto ? 'show' : 'hidden'}>
           <ul>
@@ -225,16 +284,15 @@ const App: React.FC = () => {
             
             {renderJoyBtn(3)}
             
-            {/* Joystick Center Dot */}
-            <div id="joyStick"
+            <div 
+              id="joyStick"
               className="joy-btn center-dot"
               ref={joystickRef}
               onPointerDown={startDrag}
               style={{
                 transform: `translate(${joystickPos.x}px, ${joystickPos.y}px)`
               }}
-            >
-            </div>
+            />
             
             {renderJoyBtn(4)}
             
@@ -244,9 +302,7 @@ const App: React.FC = () => {
           </div>
         </div>
       </main>
-
     </div>
-    
   );
 };
 

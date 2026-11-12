@@ -26,3 +26,6 @@ dev-dist
 
 #docker
 .dockerignore
+
+#file unnecessary
+_App.tsx
