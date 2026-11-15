@@ -1,34 +1,62 @@
+version: '3.8'
+
 services:
-  tunnel:
-    image: cloudflare/cloudflared:latest
-    container_name: tunnel
-    restart: unless-stopped
+  db:
+    image: postgres:15-alpine
+    container_name: meu_banco
+    restart: always
     environment:
-      - TUNNEL_TOKEN=eyJhIjoiYmRkMTEzNTE5ZTBlYTNiZTIzNjMzZDVmYjQ2NGZlODgiLCJ0IjoiNzRiYjI1NmYtNmY5Ni00ZWYxLTk1NDItNzNlZTA5Mjk1YWY5IiwicyI6IlkySXpaV1F4WXprdE5qYzNaQzAwWXpReUxUa3lNamt0WkRRNE1qazRPVEkzTXpreCJ9
-    command: tunnel --no-autoupdate run
+      POSTGRES_DB: meubanco
+      POSTGRES_USER: usuario
+      POSTGRES_PASSWORD: senha_segura
+    volumes:
+      - pgdata:/var/lib/postgresql/data
     networks:
-      caall_net:
-        ipv4_address: 192.168.15.162
-  front:
-    build: .
-    image: app_front
-    container_name: front
-    stdin_open: true
-    tty: true 
-    restart: unless-stopped
-    ports:
-      - "5174:8080"
+      - db-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U usuario -d meubanco"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: meu_backend
+    restart: always 
     depends_on:
-      - tunnel
+      - db
     networks:
-      caall_net:
-        ipv4_address: 192.168.15.163
+      - db-net
+      - back-net
+  frontend:
+    build:
+      context: ../CAALL_FRONT
+      dockerfile: Dockerfile
+    container_name: meu_frontend
+    restart: always
+    networks:
+      - front-net
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: meu_cloudflared
+    restart: always
+    command: tunnel run
+    environment:
+     TUNNEL_TOKEN: ${TUNNEL_TOKEN:?Defina o TUNNEL_TOKEN no arquivo .env}
+    networks:
+      - back-net
+      - front-net
+    depends_on: 
+        - backend
 networks:
-  caall_net:
-    name: caall_net
+  db-net:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 192.168.15.160/29
-          gateway: 192.168.15.161
-        
+    internal: true
+  back-net:
+    driver: bridge
+  front-net:
+    driver: bridge
+
+volumes:
+  pgdata:
