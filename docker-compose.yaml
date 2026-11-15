@@ -17,7 +17,7 @@ services:
     tty: true 
     restart: unless-stopped
     ports:
-      - "5174:8080"
+      - "5173:8080"
     depends_on:
       - tunnel
     networks:

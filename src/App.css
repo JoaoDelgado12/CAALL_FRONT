@@ -216,3 +216,17 @@ main {
   cursor: grabbing;
   background: var(--text-dark);
 }
+
+.toast-warning {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #ffcc00;
+  color: #333;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: bold;
+  z-index: 9999;
+  box-shadow: 0px 4px 6px rgba(0,0,0,0.2);
+}

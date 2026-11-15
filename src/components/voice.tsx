@@ -1,25 +1,34 @@
-export const falar = (fraseAtual: String[], vozes: SpeechSynthesisVoice[]) => {
-const texto = fraseAtual.join(' ');
-if (!texto) return;
+export const falar = (
+  fraseAtual: string[],
+  vozes: SpeechSynthesisVoice[],
+  onMissingVoiceWarning?: (msg: string) => void
+): void => {
+  if (!('speechSynthesis' in window)) {
+    onMissingVoiceWarning?.('Síntese de voz não suportada neste dispositivo');
+    return;
+  }
+  const texto = fraseAtual.join(' ').trim();
+  if (!texto) return;
 
-const utterance = new SpeechSynthesisUtterance(texto);
-utterance.lang = 'pt-BR';
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(texto);
+  utterance.lang = 'pt-BR';
 
-// Configurações para soar mais amigável
-utterance.rate = 0.95; // Levemente mais devagar
-utterance.pitch = 1.1; // Tom levemente mais alto (soar mais meiga/amigável)
+  const norm = (v: SpeechSynthesisVoice) => v.lang.replace('_', '-').toLowerCase();
+  const local = vozes.filter((v) => v.localService === true);
+  const ptBr = local.filter((v) => norm(v) === 'pt-br');
+  const pool = ptBr.length ? ptBr : local.filter((v) => norm(v).startsWith('pt'));
 
-// Tentar encontrar uma voz premium/feminina brasileira
-const ptVoices = vozes.filter(v => v.lang.includes('pt-BR'));
-const friendlyVoice = ptVoices.find(v => 
-    v.name.includes('Google') || 
-    v.name.includes('Feminino') || 
-    v.name.includes('Luciana') || 
-    v.name.includes('Natural')
-) || ptVoices[0];
+  if (pool.length > 0) {
+    utterance.voice =
+      pool.find((v) => v.default || v.name.toLowerCase().includes('natural')) ?? pool[0];
+  } else {
+    onMissingVoiceWarning?.('Voz offline em português não instalada no dispositivo');
+  }
 
-if (friendlyVoice) utterance.voice = friendlyVoice;
-
-window.speechSynthesis.speak(utterance);
+  utterance.onerror = (e) => {
+    if (e.error !== 'canceled' && e.error !== 'interrupted')
+      onMissingVoiceWarning?.('Não foi possível reproduzir a voz');
+  };
+  window.speechSynthesis.speak(utterance);
 };
-

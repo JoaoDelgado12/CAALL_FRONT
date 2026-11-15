@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import './App.css';
+import PWABadge from './PWABadge';
 import { falar } from './components/voice';
 import { mapWord } from './components/dictionary';
+import { loadLocalDictionary, synchronizeDictionary } from './db/caallDb';
 
 const App: React.FC = () => {
   const [fraseAtual, setFraseAtual] = useState<string[]>([]);
@@ -21,17 +23,21 @@ const App: React.FC = () => {
   const joystickRef = useRef<HTMLDivElement>(null);
   const displayRef = useRef<HTMLDivElement>(null);
 
+  const [wordMap, setWordMap] = useState<Map<string, string[]>>(mapWord);
+  const [offlineToast, setOfflineToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  
   useEffect(() => {
     labelsRef.current = labels;
   }, [labels]);
 
   const resetBtn = useCallback(() => {
     const defaultLabels = Array.from({ length: 8 }).map((_, i) => {
-      const wordList = mapWord.get(String(i + 1));
+      const wordList = wordMap.get(String(i + 1));
       return wordList ? wordList[0] : `Cat ${i + 1}`;
     });
     setLabels(defaultLabels);
-  }, []);
+  }, [wordMap]);
 
   const limpar = () => {
     setFraseAtual([]);
@@ -39,18 +45,57 @@ const App: React.FC = () => {
     resetBtn();
   };
 
-  const carregarFala = () => {
-    falar(fraseAtual, vozes);
-    limpar();
-  };
-
   const selecionar = useCallback((cat: number) => {
     const newLabels = Array.from({ length: 8 }).map((_, i) => {
-      const wordList = mapWord.get(String(i + 1));
+      const wordList = wordMap.get(String(i + 1));
       return wordList && wordList[cat - 1] ? wordList[cat - 1] : "---";
     });
     setLabels(newLabels);
-  }, []);
+  }, [wordMap]);
+
+  useEffect(() => {
+  const API_URL = import.meta.env.VITE_API_URL || '';
+  let cancelled = false;
+
+  const sync = async () => {
+    try {
+      const synced = await synchronizeDictionary(API_URL);
+      if (!cancelled && synced) setWordMap(synced);
+    } catch (err) {
+      console.warn('Dictionary sync failed:', err);
+    }
+  };
+
+  (async () => {
+    try {
+      const local = await loadLocalDictionary(wordMap);
+      if (cancelled) return;
+      setWordMap(local);
+    } catch (err) {
+      console.warn('Could not load local dictionary:', err);
+    }
+    await sync();
+  })();
+
+  window.addEventListener('online', sync);
+  return () => {
+    cancelled = true;
+    window.removeEventListener('online', sync);
+  };
+}, []);
+
+  const showToast = (msg: string) => {
+    clearTimeout(toastTimer.current);
+    setOfflineToast(msg);
+    toastTimer.current = setTimeout(() => setOfflineToast(null), 4000);
+  };
+
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
+
+  const carregarFala = () => {
+    falar(fraseAtual, vozes, showToast);
+    limpar();
+  };
 
   useEffect(() => {
     const carregarVozes = () => setVozes(window.speechSynthesis.getVoices());
@@ -243,6 +288,12 @@ const App: React.FC = () => {
 
   return (
     <div className="pwa-container">
+       <PWABadge />
+      {offlineToast && (
+        <div className="toast-warning" role="status" aria-live="polite">
+          {offlineToast}
+        </div>
+      )}
       <header className="header">
         <h1 className="app-title">Voz Ativa</h1>
         <button

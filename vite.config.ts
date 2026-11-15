@@ -1,6 +1,6 @@
 import { VitePWA } from 'vite-plugin-pwa';
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -11,36 +11,56 @@ export default defineConfig({
       'caall.stockmei.win' 
     ]
   },
-  plugins: [react(), VitePWA({
-    strategies: 'injectManifest',
-    srcDir: 'src', //onde estara as configurações
-    filename: 'sw.ts', //o nome do precache Manifest
-    registerType: 'autoUpdate', //atualização de versão automatica
-    injectRegister: false,
+  plugins: [
+    react(), 
+    VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src', // onde estara as configurações
+      filename: 'sw.ts', // o nome do precache Manifest
+      registerType: 'autoUpdate', // atualização de versão automatica
+      injectRegister: false,
 
-    pwaAssets: {
-      disabled: false,
-      config: true,
-    },
+      pwaAssets: {
+        disabled: false,
+        config: true,
+      },
 
-    manifest: {
-      name: 'CAALL',
-      short_name: 'CAALL',
-      description: 'APP de assistencia voltado a filosofia de uma comunicação aumentativa e alterantiva',
-      theme_color: '#86007D',
-      display: 'standalone',
-      start_url: "/"
-    },
+      manifest: {
+        name: 'CAALL',
+        short_name: 'CAALL',
+        description: 'APP de assistencia voltado a filosofia de uma comunicação aumentativa e alterantiva',
+        theme_color: '#86007D',
+        background_color: '#ffffff', // Required heuristic for PWA install prompts
+        display: 'standalone',
+        start_url: "/",
+        scope: "/", // Explicitly define scope for offline routing
+        icons: [
+          // Explicit icon mapping is strictly required by Chromium/Safari to allow installation
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png'
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable' // Supports adaptive icons on Android
+          }
+        ]
+      },
 
-    injectManifest: {
-      globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
-    },
+      injectManifest: {
+        // Broadened to include fonts and wasm/json chunks for offline Dexie/React dependencies
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,json,woff,woff2,wasm}'],
+      },
 
-    devOptions: {
-      enabled: true, //no modo dev precisa ser true
-      navigateFallback: 'index.html',
-      suppressWarnings: true,
-      type: 'module',
-    },
-  })],
+      devOptions: {
+        enabled: true, // no modo dev precisa ser true
+        navigateFallback: 'index.html',
+        suppressWarnings: true,
+        type: 'module',
+      },
+    })
+  ],
 })
