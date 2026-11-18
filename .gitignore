@@ -30,4 +30,4 @@ dev-dist
 #file unnecessary
 _App.tsx
 _dockerfile
-_vite.config
+_vite.config.ts
